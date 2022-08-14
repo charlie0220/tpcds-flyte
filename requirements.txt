@@ -1,0 +1,6 @@
+flytekit>=0.20.0
+thrift
+thrift-sasl
+PyHive
+scp
+paramiko
