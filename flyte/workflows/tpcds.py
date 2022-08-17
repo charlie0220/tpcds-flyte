@@ -145,11 +145,11 @@ def query(host: str, port: int, dbname: str) -> str:
         with open(f'flyte/workflows/queries/query{i}.sql', 'r') as f:
             data = f.read().replace(';', '')
         cursor.execute(data)
-        logg = cursor.fetchall()
+        '''logg = cursor.fetchall()
         for line in logg:
             # ff.write(line + '\n')
             print(line)
-    # ff.close()
+    # ff.close()'''
     return str(time.time()-start)
 # %%
 # Here we declare a workflow called ``my_wf``. Note the @workflow decorator,
@@ -171,12 +171,12 @@ def query(host: str, port: int, dbname: str) -> str:
 @workflow
 def tpcds():
     """Variable Setup"""
-    hdfs_dir = "/test/ssh"
-    scale = 2
-    num_parrel = 2
+    hdfs_dir = "/test/10G"
+    scale = 10
+    num_parrel = 10
     host = "192.168.103.135"
     port = 10000
-    dbname = "tpcdsssh"
+    dbname = "tpcds10g"
 
     """Generate data"""
     gen_time = create_node(generate_data, hdfs_output=hdfs_dir, scale_factor=scale, num_parts=num_parrel)
