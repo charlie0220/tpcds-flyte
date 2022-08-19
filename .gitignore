@@ -134,4 +134,7 @@ dmypy.json
 _pb_output
 _pb_output/*
 
+# Flyte exec spec
+tpcds.yaml
+
 flyte-package.tgz

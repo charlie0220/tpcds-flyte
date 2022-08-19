@@ -4,3 +4,4 @@ thrift-sasl
 PyHive
 scp
 paramiko
+sasl

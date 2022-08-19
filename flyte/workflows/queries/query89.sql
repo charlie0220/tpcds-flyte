@@ -1,36 +1,20 @@
-select *
-from (
-    select i_category
-        , i_class
-        , i_brand
-        , s_store_name
-        , s_company_name
-        , d_moy
-        , sum(ss_sales_price) sum_sales
-        , avg(sum(ss_sales_price)) over
-                 (partition by i_category, i_brand, s_store_name, s_company_name) avg_monthly_sales
-    from item
-        , store_sales
-        , date_dim
-        , store
-    where store_sales.ss_item_sk = item.i_item_sk and
-        store_sales.ss_sold_date_sk = date_dim.d_date_sk and
-        store_sales.ss_store_sk = store.s_store_sk and
-        d_year in (2000) and
-            ((i_category in ('Home','Books','Electronics') and
-                i_class in ('wallpaper','parenting','musical')
-                )
-        or (i_category in ('Shoes','Jewelry','Men') and
-                i_class in ('womens','birdal','pants') 
-            ))
-group by i_category
-    , i_class
-    , i_brand
-    , s_store_name
-    , s_company_name
-    , d_moy
-) tmp1
-where case when (avg_monthly_sales <> 0) then (abs(sum_sales - avg_monthly_sales) / avg_monthly_sales) else null end > 0.1
-order by sum_sales - avg_monthly_sales, s_store_name
+select i_item_id
+     , i_item_desc
+     , i_current_price
+from item
+   , inventory
+   , date_dim
+   , store_sales
+where i_current_price between 30 and 30+30
+  and inv_item_sk = i_item_sk
+  and d_date_sk=inv_date_sk
+  and d_date between cast('2002-05-30' as date) and (cast('2002-05-30' as date) + interval '60' days)
+  and i_manufact_id in (437,129,727,663)
+  and inv_quantity_on_hand between 100 and 500
+  and ss_item_sk = i_item_sk
+group by i_item_id
+       ,i_item_desc
+       ,i_current_price
+order by i_item_id
 limit 100
 ;
