@@ -19,7 +19,7 @@ MAX_BACKOFF_UNIT = 60
 MIN_BACKOFF_UNIT = 1
 
 
-@task
+@task(requests=Resources(cpu="1", mem="2Gi"), limits=Resources(cpu="2", mem="4Gi"))
 def generate_data(hdfs_output: str, scale_factor: int, num_parts: int) -> str:
     """Generate data using dsdgen"""
 
@@ -115,7 +115,7 @@ def createexternaltables(host: str, port: int, dbname: str) -> str:
     return str(time.time()-start)
 
 
-@task
+@task(requests=Resources(cpu="1", mem="2Gi"), limits=Resources(cpu="2", mem="4Gi"))
 def query(host: str, port: int, dbname: str) -> str:
     start = time.time()
     conn = hive.connect(host, port, "charles", "default")

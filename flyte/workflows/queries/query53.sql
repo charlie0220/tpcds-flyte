@@ -1,32 +1,27 @@
-select *
-from (
-    select i_manufact_id
-        , sum(ss_sales_price) sum_sales
-        , avg(sum(ss_sales_price)) over (partition by i_manufact_id) avg_quarterly_sales
-    from item
-        , store_sales
-        , date_dim
-        , store
-    where ss_item_sk = i_item_sk 
-        and ss_sold_date_sk = d_date_sk 
-        and ss_store_sk = s_store_sk 
-        and d_month_seq in (1212,1212+1,1212+2,1212+3,1212+4,1212+5,1212+6,1212+7,1212+8,1212+9,1212+10,1212+11) 
-        and (
-            (i_category in ('Books','Children','Electronics') 
-            and i_class in ('personal','portable','reference','self-help') 
-            and i_brand in ('scholaramalgamalg #14','scholaramalgamalg #7', 'exportiunivamalg #9','scholaramalgamalg #9')
-            ) or
-            (i_category in ('Women','Music','Men') 
-            and i_class in ('accessories','classical','fragrances','pants') 
-            and i_brand in ('amalgimporto #1','edu packscholar #1','exportiimporto #1', 'importoamalg #1')
-            )
-        )
-    group by i_manufact_id, d_qoy 
-) tmp1
-where case when avg_quarterly_sales > 0 then abs (sum_sales - avg_quarterly_sales)/ avg_quarterly_sales else null end > 0.1
-order by avg_quarterly_sales
-    , sum_sales
-    , i_manufact_id
-limit 100
+select ca_zip
+     , ca_county
+     , sum(ws_sales_price)
+from web_sales
+   , customer
+   , customer_address
+   , date_dim
+   , item
+where ws_bill_customer_sk = c_customer_sk
+  and c_current_addr_sk = ca_address_sk
+  and ws_item_sk = i_item_sk
+  and (substr(ca_zip,1,5) in ('85669', '86197','88274','83405','86475', '85392', '85460', '80348', '81792')
+    or i_item_id in (
+        select i_item_id
+        from item
+        where i_item_sk in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29)
+    )
+    ) and ws_sold_date_sk = d_date_sk
+  and d_qoy = 2
+  and d_year = 2000
+group by ca_zip
+       , ca_county
+order by ca_zip
+       , ca_county
+    limit 100
 ;
 
