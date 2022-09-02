@@ -1,6 +1,5 @@
 import paramiko
 from flytekit import task, workflow, Resources
-from flytekit.core.node_creation import create_node
 import subprocess
 import sys
 import os
@@ -13,57 +12,46 @@ from scp import SCPClient
 from pyhive import hive
 from flyte.workflows.externaltable import externaltables
 
-HDFS_CMD = "$HADOOP_HOME/bin/hdfs dfs"
 
 MAX_BACKOFF_UNIT = 60
 MIN_BACKOFF_UNIT = 1
 
 
-@task(requests=Resources(cpu="1", mem="2Gi"), limits=Resources(cpu="2", mem="4Gi"))
-def generate_data(hdfs_output: str, scale_factor: int, num_parts: int) -> str:
-    """Generate data using dsdgen"""
-
+@task(requests=Resources(cpu="4", mem="4Gi"), limits=Resources(cpu="4", mem="4Gi"))
+def generate(hdfs_output: str, scale_factor: int, num_parts: int, partition: int) -> str:
     start = time.time()
-    for partition in range(1, num_parts+1):
-        execute("./flyte/workflows/dsdgen -dir . -force Y -scale %d -child %d -parallel %d" % (scale_factor, partition, num_parts))
-        print(f"Completed : ./flyte/workflows/dsdgen -dir . -force Y -scale {scale_factor} -child {partition} -parallel {num_parts}")
-        for t in glob.glob("*.dat"):
-            copy_table_to_hdfs(hdfs_output=hdfs_output, table_name=re.sub(r"_\d+_\d+.dat", "", t), data_file=t)
-            os.remove(t)
+
+    execute("./flyte/workflows/dsdgen -dir . -force Y -scale %d -child %d -parallel %d" % (scale_factor, partition, num_parts))
+    for t in glob.glob("*.dat"):
+        copy_table_to_hdfs(hdfs_output=hdfs_output, table_name=re.sub(r"_\d+_\d+.dat", "", t), data_file=t)
+        os.remove(t)
+
     return str(time.time() - start)
 
 
 def copy_table_to_hdfs(hdfs_output: str, table_name: str, data_file: str):
     """Upload data to HDFS"""
     ssh = SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy)
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     # ssh.load_system_host_keys()
-    ssh.connect(hostname="192.168.103.135", username="charles", password="char0220")
+    ssh.connect(hostname="192.168.103.135", port=22, username="charles", password="char0220")
     scp = SCPClient(ssh.get_transport())
 
-    print(f"Beginning copy_table_to_hdfs for {table_name}/{data_file} ")
     scp.put(data_file, remote_path="/home/charles/tmp")
     scp.close()
-    # execute("%s -mkdir -p %s/%s" % (HDFS_CMD, hdfs_output, table_name))
-    stdin, stdout, stderr = ssh.exec_command(f"{HDFS_CMD} -mkdir -p {hdfs_output}\n", get_pty=True)
-    if stderr:
-        print(stderr)
-    else:
-        print(stdout)
-    stdin, stdout, stderr = ssh.exec_command(f"{HDFS_CMD} -mkdir -p {hdfs_output}/{table_name}\n", get_pty=True)
-    if stderr:
-        print(stderr)
-    else:
-        print(stdout)
-    # execute("%s -copyFromLocal -f %s %s/%s/" % (HDFS_CMD, data_file, hdfs_output, table_name))
-    stdin, stdout, stderr = ssh.exec_command(f"{HDFS_CMD} -copyFromLocal -f /home/charles/tmp/{data_file} {hdfs_output}/{table_name}/\n", get_pty=True)
-    print(f"{HDFS_CMD} -copyFromLocal -f /home/charles/tmp/{data_file} {hdfs_output}/{table_name}/")
-    if stderr:
-        print(stderr)
-    else:
-        print(stdout)
-    print(f"Copy_table_to_hdfs complete for table_name: {table_name}")
-    stdin, stdout, stderr = ssh.exec_command(f"rm /home/charles/tmp/{data_file}\n")
+    sc = "/home/charles/hadoop-3.2.3/bin/hadoop fs -mkdir -p %s" % hdfs_output
+    stdin, stdout, stderr = ssh.exec_command(sc)
+    out, err = stdout.read(), stderr.read()
+    sc = "/home/charles/hadoop-3.2.3/bin/hadoop fs -mkdir -p %s/%s" % (hdfs_output, table_name)
+    stdin, stdout, stderr = ssh.exec_command(sc)
+    out, err = stdout.read(), stderr.read()
+    sc = "/home/charles/hadoop-3.2.3/bin/hadoop fs -copyFromLocal -f /home/charles/tmp/%s %s/%s/" % (data_file, hdfs_output, table_name)
+    stdin, stdout, stderr = ssh.exec_command(sc)
+    out, err = stdout.read(), stderr.read()
+    sc = "rm /home/charles/tmp/%s" % data_file
+    stdin, stdout, stderr = ssh.exec_command(sc)
+    out, err = stdout.read(), stderr.read()
+    ssh.close()
 
 
 def execute(cmd, retries_remaining=10):
@@ -106,11 +94,6 @@ def createexternaltables(host: str, port: int, dbname: str) -> str:
         cursor.execute(f"drop table if exists {tablenames[i]}")
         cmd = "create external table " + tablenames[i] + cmds[i]
         cursor.execute(cmd)
-        # cursor.execute(f"load data inpath '{data_path}{tablenames[i]}.dat' into table {tablenames[i]}")
-    '''cursor.execute(f"drop table if exists {tablenames[0]}")
-    cmd = "create external table " + tablenames[0] + cmds[0]
-    cursor.execute(cmd)
-    # cursor.execute(f"load data inpath '{data_path}{tablenames[0]}.dat' into table {tablenames[0]}")'''
     cursor.close()
     return str(time.time()-start)
 
@@ -137,28 +120,44 @@ def query(host: str, port: int, dbname: str) -> str:
     # ff.close()'''
     return str(time.time()-start)
 
+
+@workflow
+def loadTest(hdfs_output: str, scale_factor: int) -> str:
+    """Generate data using dsdgen"""
+
+    num_parts = 24
+    loadtime = time.time()
+    for partition in range(1, num_parts+1):
+        '''execute("./flyte/workflows/dsdgen -dir . -force Y -scale %d -child %d -parallel %d" % (scale_factor, partition, num_parts))
+        print(f"Completed : ./flyte/workflows/dsdgen -dir . -force Y -scale {scale_factor} -child {partition} -parallel {num_parts}")
+        for t in glob.glob("*.dat"):
+            copy_table_to_hdfs(hdfs_output=hdfs_output, table_name=re.sub(r"_\d+_\d+.dat", "", t), data_file=t)
+            os.remove(t)'''
+        generate(hdfs_output=hdfs_output, scale_factor=scale_factor, num_parts=num_parts, partition=partition)
+    return str(time.time() - loadtime)
+
+
 @workflow
 def tpcds():
     """Variable Setup"""
-    hdfs_dir = "/test/10G"
+    hdfs_dir = "/test/maptask24"
     scale = 10
-    num_parrel = 10
     host = "192.168.103.135"
     port = 10000
-    dbname = "tpcds10g"
+    dbname = "maptask24"
 
     """Generate data"""
-    gen_time = create_node(generate_data, hdfs_output=hdfs_dir, scale_factor=scale, num_parts=num_parrel)
+    load_promise = loadTest(hdfs_output=hdfs_dir, scale_factor=scale)
 
     """Create tables"""
-    table_time = create_node(createexternaltables, host=host, port=port, dbname=dbname)
+    table_promise = createexternaltables(host=host, port=port, dbname=dbname)
 
     """Query"""
-    query_time = create_node(query, host=host, port=port, dbname=dbname)
+    query_promise = query(host=host, port=port, dbname=dbname)
 
-    gen_time >> table_time
-    table_time >> query_time
-    print(f"{gen_time}, {table_time}, {query_time}")
+    load_promise >> table_promise
+    table_promise >> query_promise
+    print(f"{load_promise}, {table_promise}, {query_promise}")
 
 
 if __name__ == "__main__":

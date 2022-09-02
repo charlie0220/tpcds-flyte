@@ -1,4 +1,4 @@
-data_path = "hdfs://192.168.103.135:9000/test/10G/"
+data_path = "hdfs://192.168.103.135:9000/test/maptask24/"
 call_center = f"""
 (
 cc_call_center_sk         bigint
